@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Local HTML5 Video Player</title>
+</head>
+<body>
+
+<style>
+	* { box-sizing: border-box; }
+	body { margin: 0; font-family: sans-serif; background: #323633 }
+
+	video {
+		z-index: 1;
+		display: block;
+		margin: 0 auto;
+		background-color: #000;
+
+		/* maximize video player size within viewport while maintaining 16:9 format */
+		width: 100vw;
+		height: 56.25vw;
+		max-width: 177.78vh;
+		max-height: 100vh;
+	}
+
+	@keyframes fadeOut {
+		0%   { opacity: 1; }
+		95%  { opacity: 1; }
+		100% { opacity: 0; }
+	}
+	.fadeout { animation: fadeOut 1s linear; }
+
+	input, ul, a {
+		position: absolute;
+		z-index: 2;
+		opacity: 0;
+		transition: opacity 0.15s ease-out;
+	}
+
+	input:hover, ul:hover, a:hover { opacity: 1; }
+
+	input[type=file] { display: none; }
+
+	a {
+		display: block;
+		width: 100%;
+		background-color: rgba(0, 0, 0, 0.7);
+		text-align: center;
+		text-decoration: none;
+		text-transform: uppercase;
+		color: white;
+		left: 0;
+		top: 0;
+		padding: 2em;
+		font-size: 1.5em;
+	}
+
+	input[type=text] {
+		bottom: 1.5em;
+		left: 1em;
+		font-size: 1.5em;
+		width: 4em;
+		text-align: center;
+		border: 1em solid rgba(0, 0, 0, 0.7);
+	}
+
+	ul {
+		margin: 0;
+		padding: 0 0 0 1em;
+		top: 0;
+		right: 0;
+		color: white;
+		background-color: rgba(0, 0, 0, 0.7);
+		list-style: none;
+	}
+
+	li {
+		margin: 0.5em;
+		cursor: pointer;
+	}
+	li.played {
+		text-decoration: line-through;
+		list-style: square;
+	}
+	
+	/* The snackbar - position it at the bottom and in the middle of the screen */
+	#snackbar {
+	  visibility: hidden; /* Hidden by default. Visible on click */
+	  min-width: 100px; /* Set a default minimum width */
+	  margin-left: -50px; /* Divide value of min-width by 2 */
+	  background-color: #333; /* Black background color */
+	  color: #fff; /* White text color */
+	  text-align: center; /* Centered text */
+	  font-weight: bold;
+	  border-radius: 2px; /* Rounded borders */
+	  padding: 16px; /* Padding */
+	  position: fixed; /* Sit on top of the screen */
+	  z-index: 1; /* Add a z-index if needed */
+	  left: 50%; /* Center the snackbar */
+	  bottom: 50%; /* 30px from the bottom */
+	}
+
+	/* Show the snackbar when clicking on a button (class added with JavaScript) */
+	#snackbar.show {
+	  visibility: visible; /* Show the snackbar */
+	  /* Add animation: Take 0.5 seconds to fade in and out the snackbar.
+	  However, delay the fade out process for 2.5 seconds */
+	  -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+	  animation: fadein 0.5s, fadeout 0.5s 2.5s;
+	}
+
+	/* Animations to fade the snackbar in and out */
+	@-webkit-keyframes fadein {
+	  from {bottom: 49%; opacity: 0;}
+	  to {bottom: 50%; opacity: 1;}
+	}
+
+	@keyframes fadein {
+	  from {bottom: 49%; opacity: 0;}
+	  to {bottom: 50%; opacity: 1;}
+	}
+
+	@-webkit-keyframes fadeout {
+	  from {bottom: 50%; opacity: 1;}
+	  to {bottom: 49%; opacity: 0;}
+	}
+
+	@keyframes fadeout {
+	  from {bottom: 50%; opacity: 1;}
+	  to {bottom: 49%; opacity: 0;}
+	}
+</style>
+
+
+<video controls autoplay></video>
+<input type="file" multiple>
+<a class='fadeout' href="#">Open Files</a>
+<input class='fadeout' type="text" placeholder="playback speed" value="1">
+<ul></ul>
+<div id="snackbar"></div>
+
+<script>	
+	// get DOM elements
+	const snackbar = document.getElementById('snackbar');
+	const video = document.querySelector('video');
+	const filesInput = document.querySelector('input[type=file]');
+	const speedInput = document.querySelector('input[type=text]');
+	const filesButton = document.querySelector('a');
+	const playlist = document.querySelector('ul');
+	
+	let volume = 0.2
+	
+	function showSnackbar() {
+
+	  // Add the "show" class to DIV
+	  snackbar.innerText = volume.toFixed(2) * 100
+	  snackbar.className = "show";
+
+	  // After 3 seconds, remove the show class from DIV
+	  setTimeout(function(){ snackbar.className = snackbar.className.replace("show", ""); }, 3000);
+	}
+	
+	document.addEventListener('dragover', function(e) {
+	    e.stopPropagation();
+	    e.preventDefault();
+	    e.dataTransfer.dropEffect = 'copy';
+	});
+
+	// Get file data on drop
+	document.addEventListener('drop', function(e) {
+	    e.stopPropagation();
+	    e.preventDefault();
+	    fileAppender(e.dataTransfer.files); // Array of all files
+	})
+	
+	// redirect filesButton click to hidden filesInput
+	filesButton.addEventListener('click', e => {
+		filesInput.click();
+		e.preventDefault();
+		return false;
+	});
+
+	filesInput.addEventListener('change', function (e) {
+		fileAppender(this.files)
+	}, false /* don't capture */);
+	
+	function fileAppender(files){
+		// delete all current list items in playlist
+		playlist.innerHTML = '';
+
+		// go through all selected files
+		for (const file of Array.from(files)) {
+			if (!file.type.match(/video.*/)) { continue; }
+
+			// create list item and object url for the video file
+			const listItem = document.createElement('li');
+			listItem.objUrl = URL.createObjectURL(file);
+			listItem.textContent = file.name;
+			
+			// give list item a click event listener for the corresponding video
+			listItem.addEventListener('click', function (e) {
+				this.classList.add('played');
+				video.src = this.objUrl;
+				video.volume = volume
+				video.playbackRate = Number(speedInput.value);
+			});
+
+			// append li to the list
+			playlist.appendChild(listItem);
+		};
+		
+		//simulate click on first video
+		if(playlist.firstChild){ playlist.firstChild.click(); }
+
+		// show the playlist for a moment
+		playlist.classList.add('fadeout');
+	}
+
+	// remove playlist fadeout after the animation ends, so it can be retriggered
+	playlist.addEventListener('animationend', e => {
+		playlist.classList.remove('fadeout');
+	});
+
+	// handle changes to speed input
+	speedInput.addEventListener('change', e => {
+		video.playbackRate = Number(speedInput.value);
+		// write actual playback rate value back to input
+		speedInput.value = Number(video.playbackRate);
+	});
+
+	// add keyboard shortcuts for pause (space) and 5 sec jump (left/right arrow)
+	document.addEventListener('keydown', e => {
+		// console.log(e.keyCode);
+		switch (e.keyCode) {
+			case 32: // space
+				video.paused ? video.play() : video.pause();
+				break;
+			case 37: // left arrow
+				video.currentTime += -5;
+				break;
+			case 39: // right arrow
+				video.currentTime += 5;
+				break;
+			case 38: // arrow up
+				volume += 0.05
+				showSnackbar()
+				video.volume = volume;
+				break;
+			case 40: // arrow down
+				volume -= 0.05
+				showSnackbar()
+				video.volume = volume;
+				break;
+			case 70: // F
+				if(document.fullscreen){
+
+					if (document.exitFullscreen) {
+						document.exitFullscreen();
+					} else if (document.webkitExitFullscreen) { /* Safari */
+						document.webkitExitFullscreen();
+					}
+
+					return;
+				}
+
+				if (video.requestFullscreen) {
+					video.requestFullscreen();
+				} else if (video.webkitRequestFullscreen) { /* Safari */
+					video.webkitRequestFullscreen();
+				}
+
+				break;
+			case 73: // I (pip function calls are async)
+				document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture() ;
+				break;
+		}
+	});
+</script>
+
+</body>
+</html>
