@@ -1,9 +1,9 @@
-##Local video player with drag-drop playlist support
+## Local video player with drag-drop playlist support
 
 Open files or drag-drop video files as playlist.
 Written in pure javascript and, css
 
-####Shortcuts:
+#### Shortcuts:
 Key | Action
 --- | ---
 `i` | Picture in Picture
@@ -13,7 +13,7 @@ Key | Action
 `Left Arrow` | Seek Backwards
 `Right Arrow` | Seek Forward
 
-####Tested in:
+#### Tested in:
 Browser | Versions
 --- | ---
 Google Chrome | `89.0 (ubuntu 20.04 deb)`
